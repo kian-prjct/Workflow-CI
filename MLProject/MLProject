@@ -1,0 +1,33 @@
+name: wine-quality-classification
+
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    parameters:
+      n_estimators:
+        type: int
+        default: 200
+      max_depth:
+        type: int
+        default: 10
+      min_samples_split:
+        type: int
+        default: 5
+      min_samples_leaf:
+        type: int
+        default: 2
+      test_size:
+        type: float
+        default: 0.2
+      random_state:
+        type: int
+        default: 42
+    command: >
+      python modelling.py
+        --n_estimators {n_estimators}
+        --max_depth {max_depth}
+        --min_samples_split {min_samples_split}
+        --min_samples_leaf {min_samples_leaf}
+        --test_size {test_size}
+        --random_state {random_state}
