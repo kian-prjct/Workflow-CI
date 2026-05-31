@@ -136,7 +136,11 @@ def main():
     print(f"{'='*55}")
 
     # ── Setup DagsHub + MLflow ─────────────────────────────────────────────
-    dagshub.init(repo_owner=DAGSHUB_OWNER, repo_name=DAGSHUB_REPO, mlflow=True)
+    import os
+    os.environ['MLFLOW_TRACKING_URI'] = f"https://dagshub.com/{DAGSHUB_OWNER}/{DAGSHUB_REPO}.mlflow"
+    os.environ['MLFLOW_TRACKING_USERNAME'] = os.getenv('DAGSHUB_USERNAME', DAGSHUB_OWNER)
+    os.environ['MLFLOW_TRACKING_PASSWORD'] = os.getenv('DAGSHUB_TOKEN', '')
+    mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     # ── Load data ──────────────────────────────────────────────────────────
