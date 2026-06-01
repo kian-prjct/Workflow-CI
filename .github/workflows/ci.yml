@@ -12,9 +12,6 @@ env:
   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model
 
 jobs:
-  # ══════════════════════════════════════════════════════════════════════════
-  # JOB 1: Training Model dengan MLflow Project
-  # ══════════════════════════════════════════════════════════════════════════
   train:
     name: Train Model (MLflow Project)
     runs-on: ubuntu-latest
@@ -24,33 +21,21 @@ jobs:
         working-directory: MLProject
 
     steps:
-      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ── 2. Setup Python ───────────────────────────────────────────────────
       - name: Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
 
-      # ── 3. Install dependencies ───────────────────────────────────────────
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install mlflow==2.19.0 scikit-learn==1.5.2 pandas==2.2.3 \
-                      numpy==1.26.4 matplotlib==3.9.2 dagshub==0.3.36
+                      numpy==1.26.4 matplotlib==3.9.2
 
-      # ── 4. Konfigurasi DagsHub credentials ───────────────────────────────
-      - name: Configure DagsHub Credentials
-        run: |
-          mkdir -p ~/.dagshub
-          echo "MLFLOW_TRACKING_USERNAME=${{ secrets.DAGSHUB_USERNAME }}" >> $GITHUB_ENV
-          echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.DAGSHUB_TOKEN }}" >> $GITHUB_ENV
-
-      # ── 5. Jalankan MLflow Project ─────────────────────────────────────────
-      - name: Run MLflow Project
+      - name: Run Training
         env:
           DAGSHUB_OWNER: ${{ secrets.DAGSHUB_USERNAME }}
           DAGSHUB_REPO: Workflow-CI
@@ -63,15 +48,11 @@ jobs:
             --min_samples_split 5 \
             --min_samples_leaf 2
 
-      # ── 6. Verifikasi output model ─────────────────────────────────────────
       - name: Verify Model Output
         run: |
-          echo "=== Model output ==="
-          ls -la model_output/ || echo "No model_output dir"
-          echo "=== Artifacts ==="
-          ls -la artifacts/ || echo "No artifacts dir"
+          echo "=== Model output ===" && ls -la model_output/ || echo "No model_output dir"
+          echo "=== Artifacts ===" && ls -la artifacts/ || echo "No artifacts dir"
 
-      # ── 7. Upload model artifact ke GitHub ────────────────────────────────
       - name: Upload Model Artifact to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -81,7 +62,6 @@ jobs:
             MLProject/artifacts/
           retention-days: 90
 
-      # ── 8. Commit model ke repository (GitHub LFS friendly) ──────────────
       - name: Commit Model Artifacts to Repository
         run: |
           git config --local user.email "actions@github.com"
@@ -91,79 +71,63 @@ jobs:
             git commit -m "ci: update model artifacts [run #${{ github.run_number }}] [skip ci]"
           git push || echo "Nothing to push"
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # JOB 2: Build dan Push Docker Image ke Docker Hub
-  # ══════════════════════════════════════════════════════════════════════════
   docker:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: train      # Jalankan setelah training selesai
+    needs: train
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: MLProject
 
     steps:
-      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ── 2. Setup Python & MLflow ──────────────────────────────────────────
-      - name: Setup Python & MLflow
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install MLflow
-        run: pip install mlflow==2.19.0 scikit-learn==1.5.2
-
-      # ── 3. Download model artifact dari job sebelumnya ────────────────────
       - name: Download Model Artifact
         uses: actions/download-artifact@v4
         with:
           name: wine-quality-model-${{ github.run_number }}
           path: MLProject/
 
-      # ── 4. Login ke Docker Hub ─────────────────────────────────────────────
+      - name: Create Dockerfile
+        run: |
+          cat > Dockerfile << 'EOF'
+          FROM python:3.12-slim
+          WORKDIR /app
+          RUN pip install --no-cache-dir \
+              mlflow==2.19.0 \
+              scikit-learn==1.5.2 \
+              pandas==2.2.3 \
+              numpy==1.26.4
+          COPY MLProject/ /app/
+          EXPOSE 8080
+          CMD ["mlflow", "models", "serve", "--model-uri", "/app/model_output/wine_quality_model", "--host", "0.0.0.0", "--port", "8080", "--no-conda"]
+          EOF
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # ── 5. Setup Docker Buildx ─────────────────────────────────────────────
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 6. Build Docker Image menggunakan mlflow build-docker ─────────────
-      - name: Build Docker Image with MLflow
-        run: |
-          mlflow models build-docker \
-            --model-uri "model_output/wine_quality_model" \
-            --name "${{ env.DOCKER_IMAGE }}" \
-            --enable-mlserver
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:run-${{ github.run_number }}
 
-      # ── 7. Tag dan Push ke Docker Hub ─────────────────────────────────────
-      - name: Tag Docker Image
-        run: |
-          docker tag ${{ env.DOCKER_IMAGE }}:latest \
-                     ${{ env.DOCKER_IMAGE }}:run-${{ github.run_number }}
-
-      - name: Push Docker Image to Docker Hub
-        run: |
-          docker push ${{ env.DOCKER_IMAGE }}:latest
-          docker push ${{ env.DOCKER_IMAGE }}:run-${{ github.run_number }}
-          echo "✅ Docker image pushed: ${{ env.DOCKER_IMAGE }}:latest"
-          echo "✅ Docker image pushed: ${{ env.DOCKER_IMAGE }}:run-${{ github.run_number }}"
-
-      # ── 8. Simpan link Docker Hub ke file ─────────────────────────────────
       - name: Save Docker Hub Link
         run: |
-          echo "Docker Hub Image: https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model" \
-            > ../docker_hub_link.txt
-          cat ../docker_hub_link.txt
+          echo "https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/wine-quality-model" \
+            > docker_hub_link.txt
+          cat docker_hub_link.txt
 
       - name: Upload Docker Hub Link
         uses: actions/upload-artifact@v4
         with:
           name: docker-hub-info
-          path: MLProject/../docker_hub_link.txt
+          path: docker_hub_link.txt
