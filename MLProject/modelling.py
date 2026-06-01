@@ -135,13 +135,11 @@ def main():
     print("  CI TRAINING: Wine Quality (MLflow Project)")
     print(f"{'='*55}")
 
-    # ── Setup DagsHub + MLflow via environment variable (untuk CI) ─────────
-    print("🔗 Menghubungkan ke DagsHub...")
+    # ── Setup MLflow — simpan lokal di CI ─────────────────────────────────
+    print("🔗 Setup MLflow tracking...")
     import os
-    os.environ['MLFLOW_TRACKING_URI'] = f"https://dagshub.com/{DAGSHUB_OWNER}/{DAGSHUB_REPO}.mlflow"
-    os.environ['MLFLOW_TRACKING_USERNAME'] = os.getenv('DAGSHUB_USERNAME', DAGSHUB_OWNER)
-    os.environ['MLFLOW_TRACKING_PASSWORD'] = os.getenv('DAGSHUB_TOKEN', '')
-    mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
+    mlflow.set_tracking_uri("mlruns")
+    mlflow.set_experiment(EXPERIMENT_NAME)
 
     # Buat experiment jika belum ada
     from mlflow.tracking import MlflowClient
