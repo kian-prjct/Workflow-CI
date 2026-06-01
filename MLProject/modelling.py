@@ -23,7 +23,6 @@ import matplotlib.pyplot as plt
 
 import mlflow
 import mlflow.sklearn
-import dagshub
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
@@ -34,12 +33,6 @@ from sklearn.metrics import (
 )
 
 warnings.filterwarnings('ignore')
-
-
-# ── Konfigurasi DagsHub ────────────────────────────────────────────────────
-DAGSHUB_OWNER   = os.getenv("DAGSHUB_OWNER", "kian-prjct")
-DAGSHUB_REPO    = os.getenv("DAGSHUB_REPO",  "Workflow-CI")
-EXPERIMENT_NAME = "wine-quality-ci-pipeline"
 
 # ── Konfigurasi Data ───────────────────────────────────────────────────────
 DATA_DIR   = "winequality_preprocessing"
@@ -135,9 +128,8 @@ def main():
     print("  CI TRAINING: Wine Quality (MLflow Project)")
     print(f"{'='*55}")
 
-    # ── Setup MLflow — simpan lokal di CI ─────────────────────────────────
+    # ── Setup MLflow tracking ──────────────────────────────────────────────
     print("🔗 Setup MLflow tracking...")
-    import os
     mlflow.set_tracking_uri("mlruns")
     mlflow.set_experiment(EXPERIMENT_NAME)
 
