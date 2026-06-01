@@ -34,6 +34,10 @@ from sklearn.metrics import (
 
 warnings.filterwarnings('ignore')
 
+
+# ── Konfigurasi DagsHub ────────────────────────────────────────────────────
+EXPERIMENT_NAME = "wine-quality-ci-pipeline"
+
 # ── Konfigurasi Data ───────────────────────────────────────────────────────
 DATA_DIR   = "winequality_preprocessing"
 TRAIN_PATH = os.path.join(DATA_DIR, "winequality_train.csv")
